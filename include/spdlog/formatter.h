@@ -38,7 +38,7 @@ private:
     const pattern_time_type _pattern_time;
     std::vector<std::unique_ptr<details::flag_formatter>> _formatters;
     std::tm get_time(details::log_msg& msg);
-    void handle_flag(char flag);
+    void handle_flag(char flag, std::string& length_chars);
     void compile_pattern(const std::string& pattern);
 };
 }

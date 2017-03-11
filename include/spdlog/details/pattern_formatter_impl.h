@@ -27,9 +27,34 @@ namespace details
 class flag_formatter
 {
 public:
+    flag_formatter(unsigned long length = 0)
+        : _length(length)
+    {}
     virtual ~flag_formatter()
     {}
     virtual void format(details::log_msg& msg, const std::tm& tm_time) = 0;
+protected:
+    unsigned long _length;
+    fmt::MemoryWriter& pad_space_left(fmt::MemoryWriter& w, const std::string& str)
+    {
+      if (str.size() < _length)
+        w << std::string(_length - str.size(), ' ');
+      w << str;
+      return w;
+    }
+    fmt::MemoryWriter& pad_space_right(fmt::MemoryWriter& w, const std::string& str)
+    {
+        w << str;
+        if (str.size() < _length)
+            w << std::string(_length - str.size(), ' ');
+        return w;
+    }
+    fmt::MemoryWriter& pad_space_right(fmt::MemoryWriter& w, size_t val)
+    {
+      const auto padded_format = fmt::format("{{: <{}}}", _length);
+      w << fmt::format(padded_format, val);
+      return w;
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////
@@ -39,9 +64,13 @@ namespace
 {
 class name_formatter:public flag_formatter
 {
+public:
+    name_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << *msg.logger_name;
+        pad_space_left(msg.formatted, *msg.logger_name);
     }
 };
 }
@@ -49,18 +78,26 @@ class name_formatter:public flag_formatter
 // log level appender
 class level_formatter:public flag_formatter
 {
+public:
+    level_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << level::to_str(msg.level);
+        pad_space_left(msg.formatted, level::to_str(msg.level));
     }
 };
 
 // short log level appender
 class short_level_formatter:public flag_formatter
 {
+public:
+    short_level_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << level::to_short_str(msg.level);
+        pad_space_left(msg.formatted, level::to_short_str(msg.level));
     }
 };
 
@@ -87,9 +124,13 @@ static const days_array& days()
 }
 class a_formatter:public flag_formatter
 {
+public:
+    a_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << days()[tm_time.tm_wday];
+        pad_space_right(msg.formatted, days()[tm_time.tm_wday]);
     }
 };
 // message counter formatter
@@ -108,9 +149,13 @@ static const days_array& full_days()
 }
 class A_formatter SPDLOG_FINAL :public flag_formatter
 {
+public:
+    A_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << full_days()[tm_time.tm_wday];
+        pad_space_right(msg.formatted, full_days()[tm_time.tm_wday]);
     }
 };
 
@@ -123,9 +168,13 @@ static const months_array& months()
 }
 class b_formatter:public flag_formatter
 {
+public:
+    b_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << months()[tm_time.tm_mon];
+        pad_space_right(msg.formatted, months()[tm_time.tm_mon]);
     }
 };
 
@@ -137,9 +186,13 @@ static const months_array& full_months()
 }
 class B_formatter SPDLOG_FINAL :public flag_formatter
 {
+public:
+    B_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << full_months()[tm_time.tm_mon];
+        pad_space_right(msg.formatted, full_months()[tm_time.tm_mon]);
     }
 };
 
@@ -384,18 +437,25 @@ private:
 // Thread id
 class t_formatter SPDLOG_FINAL:public flag_formatter
 {
+public:
+    t_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << msg.thread_id;
+        pad_space_right(msg.formatted, msg.thread_id);
     }
 };
 
 // Current pid
 class pid_formatter SPDLOG_FINAL:public flag_formatter
 {
+    pid_formatter(unsigned long length = 0)
+        : flag_formatter(length)
+    {}
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << details::os::pid();
+        pad_space_right(msg.formatted, details::os::pid());
     }
 };
 
@@ -504,6 +564,7 @@ inline void spdlog::pattern_formatter::compile_pattern(const std::string& patter
 {
     auto end = pattern.end();
     std::unique_ptr<details::aggregate_formatter> user_chars;
+    std::string length_chars;
     for (auto it = pattern.begin(); it != end; ++it)
     {
         if (*it == '%')
@@ -511,9 +572,13 @@ inline void spdlog::pattern_formatter::compile_pattern(const std::string& patter
             if (user_chars) //append user chars found so far
                 _formatters.push_back(std::move(user_chars));
 
-            if (++it != end)
-                handle_flag(*it);
-            else
+            while (++it != end)
+            {
+                if (handle_flag(*it, length_chars))
+                    break;
+            }
+
+            if (it == end)
                 break;
         }
         else // chars not following the % sign should be displayed as is
@@ -529,25 +594,38 @@ inline void spdlog::pattern_formatter::compile_pattern(const std::string& patter
     }
 
 }
-inline void spdlog::pattern_formatter::handle_flag(char flag)
+inline bool spdlog::pattern_formatter::handle_flag(char flag, std::string& length_chars)
 {
+    // handle padding
+    if (flag >= '0' && flag <= '9')
+    {
+        length_chars += flag;
+        return false;
+    }
+
+    unsigned long length = 0;
+    if (!length_chars.empty())
+    {
+      length = strtoul(length_chars.c_str(), nullptr, 10);
+    }
+
     switch (flag)
     {
     // logger name
     case 'n':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::name_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::name_formatter(length)));
         break;
 
     case 'l':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::level_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::level_formatter(length)));
         break;
 
     case 'L':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::short_level_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::short_level_formatter(length)));
         break;
 
     case('t'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::t_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::t_formatter(length)));
         break;
 
     case('v'):
@@ -555,20 +633,20 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         break;
 
     case('a'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::a_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::a_formatter(length)));
         break;
 
     case('A'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::A_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::A_formatter(length)));
         break;
 
     case('b'):
     case('h'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::b_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::b_formatter(length)));
         break;
 
     case('B'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::B_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::B_formatter(length)));
         break;
     case('c'):
         _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::c_formatter()));
@@ -649,7 +727,7 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         break;
 
     case ('P'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::pid_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::pid_formatter(length)));
         break;
 
 #if defined(SPDLOG_ENABLE_MESSAGE_COUNTER)
@@ -658,11 +736,19 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         break;
 #endif
 
-    default: //Unknown flag appears as is
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::ch_formatter('%')));
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::ch_formatter(flag)));
+    default: //Unkown flag appears as is
+        auto chars = std::unique_ptr<details::aggregate_formatter>(new details::aggregate_formatter());
+        chars->add_ch('%');
+        for (auto it = length_chars.begin(); it != length_chars.end(); ++it)
+          chars->add_ch(*it);
+        chars->add_ch(flag);
+        _formatters.push_back(std::move(chars));
         break;
     }
+
+    length_chars.clear();
+
+    return true;
 }
 
 inline std::tm spdlog::pattern_formatter::get_time(details::log_msg& msg)
