@@ -27,9 +27,61 @@ namespace details
 class flag_formatter
 {
 public:
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+    flag_formatter()
+    {}
+#endif
     virtual ~flag_formatter()
     {}
     virtual void format(details::log_msg& msg, const std::tm& tm_time) = 0;
+
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+protected:
+    explicit flag_formatter(const format_padding& padding)
+        : _padding(padding)
+    {}
+#endif
+
+    inline bool has_padding() const
+    {
+#ifndef SPDLOG_ENABLE_PATTERN_PADDING
+      return false;
+#else
+      return _padding._width > 0;
+#endif
+    }
+
+    template<typename T>
+    void format_pad(details::log_msg& msg, T val)
+    {
+      if (!has_padding())
+          msg.formatted << val;
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+      else
+      {
+          auto spec = fmt::pad(val, _padding._width, _padding._char);
+          spec.align_ = _padding._alignment;
+          msg.formatted << spec;
+      }
+#endif
+    }
+
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+    template<>
+    void format_pad(details::log_msg& msg, std::string str)
+    {
+      if (!has_padding())
+          msg.formatted << str;
+      else
+      {
+          auto spec = fmt::pad(str.c_str(), _padding._width, _padding._char);
+          spec.align_ = _padding._alignment;
+          msg.formatted << spec;
+      }
+    }
+
+    const format_padding _padding;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////
@@ -39,9 +91,16 @@ namespace
 {
 class name_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    name_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << *msg.logger_name;
+        format_pad(msg, *msg.logger_name);
     }
 };
 }
@@ -49,18 +108,32 @@ class name_formatter:public flag_formatter
 // log level appender
 class level_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    level_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << level::to_str(msg.level);
+        format_pad(msg, level::to_str(msg.level));
     }
 };
 
 // short log level appender
 class short_level_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    short_level_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << level::to_short_str(msg.level);
+        format_pad(msg, level::to_short_str(msg.level));
     }
 };
 
@@ -82,9 +155,16 @@ static int to12h(const tm& t)
 static const std::string days[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 class a_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    a_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << days[tm_time.tm_wday];
+        format_pad(msg, days[tm_time.tm_wday]);
     }
 };
 
@@ -92,9 +172,16 @@ class a_formatter:public flag_formatter
 static const std::string full_days[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 class A_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    A_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << full_days[tm_time.tm_wday];
+        format_pad(msg, full_days[tm_time.tm_wday]);
     }
 };
 
@@ -102,9 +189,16 @@ class A_formatter:public flag_formatter
 static const std::string  months[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec" };
 class b_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    b_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << months[tm_time.tm_mon];
+        format_pad(msg, months[tm_time.tm_mon]);
     }
 };
 
@@ -112,9 +206,16 @@ class b_formatter:public flag_formatter
 static const std::string full_months[] { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 class B_formatter:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    B_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm& tm_time) override
     {
-        msg.formatted << full_months[tm_time.tm_mon];
+        format_pad(msg, full_months[tm_time.tm_mon]);
     }
 };
 
@@ -369,18 +470,32 @@ private:
 // Thread id
 class t_formatter SPDLOG_FINAL:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    t_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << msg.thread_id;
+        format_pad(msg, msg.thread_id);
     }
 };
 
 // Current pid
 class pid_formatter SPDLOG_FINAL:public flag_formatter
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+public:
+    pid_formatter(const format_padding& padding)
+        : flag_formatter(padding)
+    {}
+#endif
+
     void format(details::log_msg& msg, const std::tm&) override
     {
-        msg.formatted << details::os::pid();
+        format_pad(msg, details::os::pid());
     }
 };
 
@@ -504,9 +619,20 @@ inline void spdlog::pattern_formatter::compile_pattern(const std::string& patter
             if (user_chars) //append user chars found so far
                 _formatters.push_back(std::move(user_chars));
 
-            if (++it != end)
-                handle_flag(*it);
-            else
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+            format_padding padding;
+#endif
+            while (++it != end)
+            {
+#ifndef SPDLOG_ENABLE_PATTERN_PADDING
+                if (handle_flag(*it))
+#else
+                if (handle_flag(*it, padding))
+#endif
+                    break;
+            }
+
+            if (it == end)
                 break;
         }
         else // chars not following the % sign should be displayed as is
@@ -522,25 +648,64 @@ inline void spdlog::pattern_formatter::compile_pattern(const std::string& patter
     }
 
 }
-inline void spdlog::pattern_formatter::handle_flag(char flag)
+
+#ifndef SPDLOG_ENABLE_PATTERN_PADDING
+inline bool spdlog::pattern_formatter::handle_flag(char flag)
+#else
+inline bool spdlog::pattern_formatter::handle_flag(char flag, format_padding& padding)
+#endif
 {
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+    // handle format padding left alignment
+    if (flag == '-')
+    {
+        padding._alignment = fmt::ALIGN_LEFT;
+        return false;
+    }
+    // handle format specifiers for padding
+    if (flag >= '0' && flag <= '9')
+    {
+        if (flag == '0' && padding._char == ' ')
+            padding._char = '0';
+        else
+            padding._width = padding._width * 10 + (flag - '0');
+        return false;
+    }
+#endif
+
     switch (flag)
     {
     // logger name
     case 'n':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::name_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::name_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case 'l':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::level_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::level_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case 'L':
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::short_level_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::short_level_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case('t'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::t_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::t_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case('v'):
@@ -548,20 +713,36 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         break;
 
     case('a'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::a_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::a_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case('A'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::A_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::A_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case('b'):
     case('h'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::b_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::b_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
     case('B'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::B_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::B_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
     case('c'):
         _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::c_formatter()));
@@ -646,7 +827,11 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         break;
 
     case ('P'):
-        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::pid_formatter()));
+        _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::pid_formatter(
+#ifdef SPDLOG_ENABLE_PATTERN_PADDING
+          padding
+#endif
+        )));
         break;
 
 
@@ -659,6 +844,8 @@ inline void spdlog::pattern_formatter::handle_flag(char flag)
         _formatters.push_back(std::unique_ptr<details::flag_formatter>(new details::ch_formatter(flag)));
         break;
     }
+
+    return true;
 }
 
 inline std::tm spdlog::pattern_formatter::get_time(details::log_msg& msg)
